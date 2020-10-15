@@ -56,6 +56,7 @@ import kafdrop.config.SchemaRegistryConfiguration.SchemaRegistryProperties;
 import kafdrop.model.MessageVO;
 import kafdrop.model.TopicPartitionVO;
 import kafdrop.model.TopicVO;
+import kafdrop.service.KaaService;
 import kafdrop.service.KafkaMonitor;
 import kafdrop.service.MessageInspector;
 import kafdrop.service.TopicNotFoundException;
@@ -73,13 +74,16 @@ public final class MessageController {
   
   private final ProtobufDescriptorConfiguration.ProtobufDescriptorProperties protobufProperties;
 
-  public MessageController(KafkaMonitor kafkaMonitor, MessageInspector messageInspector, MessageFormatProperties messageFormatProperties, MessageFormatProperties keyFormatProperties, SchemaRegistryProperties schemaRegistryProperties, ProtobufDescriptorProperties protobufProperties) {
+  private final KaaService kaaService;
+
+  public MessageController(KafkaMonitor kafkaMonitor, MessageInspector messageInspector, MessageFormatProperties messageFormatProperties, MessageFormatProperties keyFormatProperties, SchemaRegistryProperties schemaRegistryProperties, ProtobufDescriptorProperties protobufProperties, KaaService kaaService) {
     this.kafkaMonitor = kafkaMonitor;
     this.messageInspector = messageInspector;
     this.messageFormatProperties = messageFormatProperties;
     this.keyFormatProperties = keyFormatProperties;
     this.schemaRegistryProperties = schemaRegistryProperties;
     this.protobufProperties = protobufProperties; 
+    this.kaaService = kaaService;
   }
 
   /**
@@ -260,9 +264,12 @@ public final class MessageController {
 
     if (format == MessageFormat.AVRO) {
       final var schemaRegistryUrl = schemaRegistryProperties.getConnect();
-      final var schemaRegistryAuth = schemaRegistryProperties.getAuth();
-
-      deserializer = new AvroMessageDeserializer(topicName, schemaRegistryUrl, schemaRegistryAuth);
+      if (schemaRegistryUrl != null && schemaRegistryUrl.equals("kaa")) {
+        deserializer = new KaaAvroMessageDeserializer(kaaService.getSchemaRegistry());
+      } else {
+        final var schemaRegistryAuth = schemaRegistryProperties.getAuth();
+        deserializer = new AvroMessageDeserializer(topicName, schemaRegistryUrl, schemaRegistryAuth);
+      }
     } else if (format == MessageFormat.PROTOBUF) {
       // filter the input file name
       final var descFileName = descFile.replace(".desc", "")
